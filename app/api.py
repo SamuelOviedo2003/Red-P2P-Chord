@@ -24,6 +24,12 @@ def leave_network():
     chord_node.leave()
     return jsonify({"success": True}), 200
 
+@app.route('/show', methods=['GET'])
+def show_network():
+    network_structure = chord_node.show()
+    return jsonify({"success": True, "network": " ---> ".join(network_structure)}), 200
+
+
 @app.route('/lookup', methods=['GET'])
 def lookup():
     key = request.args.get('key')
