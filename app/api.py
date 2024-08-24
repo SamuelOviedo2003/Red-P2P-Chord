@@ -29,6 +29,20 @@ def show_network():
     network_structure = chord_node.show()
     return jsonify({"success": True, "network": " ---> ".join(network_structure)}), 200
 
+@app.route('/show_finger_table', methods=['GET'])
+def show_finger_table():
+    finger_table = chord_node.show_finger_table()
+    return f"<pre>{finger_table}</pre>", 200
+
+@app.route('/store', methods=['POST'])
+def store_file():
+    file_id = request.json.get('file_id')  # Asumiendo que ahora pasas un número directamente
+    if file_id is not None:
+        chord_node.store_file(file_id)
+        return jsonify({"success": True, "message": f"Archivo '{file_id}' almacenado."}), 200
+    else:
+        return jsonify({"error": "File ID is required"}), 400
+
 
 @app.route('/lookup', methods=['GET'])
 def lookup():

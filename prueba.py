@@ -1,8 +1,29 @@
 class ChordNode:
-    def __init__(self, id):
+    def __init__(self, id,total_bits):
         self.id = id
+        self.total_bits = total_bits
         self.successor = None
         self.predecessor = None
+        self.finger_table = self.create_finger_table()
+
+    def create_finger_table(self):
+        # Inicializa la tabla de dedos con m entradas
+        finger_table = []
+        for i in range(1, self.total_bits + 1):
+            start = (self.id + 2**(i-1)) % 2**self.total_bits
+            finger_table.append({
+                'start': start,         # inicio del intervalo
+                'interval': (start, (start + 2**(i-1)) % 2**self.total_bits),  # rango de IDs que cubre
+                'successor': None       # nodo sucesor (por ahora None)
+            })
+        return finger_table
+    
+    def show_finger_table(self):
+        print(f"Finger Table para el nodo {self.id}:")
+        for i, entry in enumerate(self.finger_table):
+            print(f"Entrada {i+1}: start = {entry['start']}, "
+                  f"intervalo = {entry['interval']}, "
+                  f"successor = {entry['successor'].id if entry['successor'] else None}")
 
     def join(self, node_address):
         if node_address > self.id:
@@ -33,16 +54,12 @@ class ChordNode:
             current_predecessor.successor = current_successor
             self.successor = None
             self.predecessor = None
+    
+    def verificar(self):
+        return self.predecessor is not None
 
 # Ejemplo de uso
-node1 = ChordNode(10)
-node2 = ChordNode(20)
-node3 = ChordNode(30)
-node4 = ChordNode(40)
+node1 = ChordNode(10,9)
 
-node1.join(20)
-node1.join(30)
-node1.join(40)
-node3.leave()
 
-node1.show()
+print(node1.show_finger_table())
