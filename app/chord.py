@@ -47,40 +47,42 @@ class ChordNode:
         # Determina el nodo correcto para almacenar el archivo
         target_node = self.find_node(file_id)
         if target_node.id != self.id:
-            # Usar gRPC para comunicarte con el nodo destino
-            with grpc.insecure_channel(f'localhost:{target_node.port}') as channel:
-                stub = chord_pb2_grpc.ChordServiceStub(channel)
-                response = stub.StoreFile(chord_pb2.StoreFileRequest(file_id=file_id))
-                print(response.message)
+            # Usar HTTP para enviar el archivo al nodo destino
+            url = f"http://localhost:{target_node.port}/store"
+            response = requests.post(url, json={"file_id": file_id})
+            if response.status_code == 200:
+                print(f"Archivo '{file_id}' almacenado en el nodo con ID {target_node.id} ({target_node.port}).")
+            else:
+                print(f"Error al almacenar el archivo '{file_id}' en el nodo con ID {target_node.id} ({target_node.port}).")
         else:
             self.files.append(file_id)
             print(f"Archivo '{file_id}' almacenado en el nodo con ID {self.id} ({self.port}).")
-    
+
     def find_node(self, file_id):
-        # Si el ID del archivo es menor que el ID del nodo actual
-        if file_id < self.id:
-            # Recorrer hacia atrás (predecessor)
-            if (self.predecessor is not None) and self.predecessor.id > file_id:
-                print(f"Buscando hacia atrás en el nodo con ID {self.predecessor.id}")
-                return self.predecessor.find_node(file_id)
-            else:
-                # Si llegamos a un nodo donde el predecessor ya no es mayor, almacenamos aquí
+        # Caso especial donde el nodo es el menor ID y el archivo debería estar en el nodo con el mayor ID
+        if self.predecessor and self.predecessor.id > self.id:
+            if file_id > self.predecessor.id or file_id <= self.id:
                 print(f"Archivo será almacenado en el nodo con ID {self.id}.")
                 return self
-        # Si el ID del archivo es mayor que el ID del nodo actual
-        elif file_id > self.id:
-            # Recorrer hacia adelante (successor)
-            if (self.successor is not None) and self.successor.id > file_id:
-                print(f"Buscando hacia adelante en el nodo con ID {self.successor.id}")
-                return self.successor.find_node(file_id)
-            else:
-                # Si llegamos a un nodo donde el sucesor ya no es menor, almacenamos aquí
-                print(f"Archivo será almacenado en el nodo con ID {self.id}.")
-                return self
-        else:
-            # Si el archivo debe ser almacenado en el nodo actual
+        
+        # Si el archivo pertenece al rango entre el nodo actual y su sucesor
+        if self.successor and (self.id < file_id <= self.successor.id):
+            print(f"Archivo será almacenado en el nodo con ID {self.successor.id}.")
+            return self.successor
+        
+        # Si el archivo pertenece al nodo actual (es el menor nodo)
+        if self.predecessor and (self.predecessor.id < file_id <= self.id):
             print(f"Archivo será almacenado en el nodo con ID {self.id}.")
             return self
+        
+        # Si ninguna de las condiciones anteriores se cumple, seguir buscando hacia adelante
+        if self.successor and self.successor.id != self.id:
+            return self.successor.find_node(file_id)
+        
+        # Caso donde solo hay un nodo o no se encontró un nodo sucesor adecuado
+        print(f"Archivo será almacenado en el nodo con ID {self.id}.")
+        return self
+
 
     def show(self):
         result = []
@@ -112,22 +114,63 @@ class ChordNode:
             self.predecessor.update_fingers()
 
     def join(self, node_info):
-        node_address, node_port = node_info
+        node_id, node_port = node_info
+        ip = 'localhost'
+        port = node_port
 
-        if node_address > self.id:
-            if self.successor is None:
-                self.successor = ChordNode(node_address, node_port)
+        # Verificación para evitar recursión infinita
+        if self.id == node_id or (self.successor and self.successor.id == node_id) or (self.predecessor and self.predecessor.id == node_id):
+            return
+
+        # Caso cuando el nodo entrante tiene un ID mayor que el actual
+        if node_id > self.id:
+            if self.successor is None or node_id < self.successor.id:
+                previous_successor = self.successor
+                self.successor = ChordNode(node_id, node_port)
+
+                # Notificar al nuevo sucesor para que actualice su predecesor
+                url = f"http://{ip}:{port}/update_predecessor"
+                requests.post(url, json={"predecessor_id": self.id, "predecessor_port": self.port})
+
+                # Notificar al antiguo sucesor para que actualice su predecesor
+                if previous_successor:
+                    url = f"http://localhost:{previous_successor.port}/update_predecessor"
+                    requests.post(url, json={"predecessor_id": node_id, "predecessor_port": node_port})
+
             else:
                 self.successor.join(node_info)
-        elif node_address < self.id:
-            if self.predecessor is None:
-                self.predecessor = ChordNode(node_address, node_port)
+
+        # Caso cuando el nodo entrante tiene un ID menor que el actual
+        elif node_id < self.id:
+            if self.predecessor is None or node_id > self.predecessor.id:
+                previous_predecessor = self.predecessor
+                self.predecessor = ChordNode(node_id, node_port)
+
+                # Notificar al nuevo predecesor para que actualice su sucesor
+                url = f"http://{ip}:{port}/update_successor"
+                requests.post(url, json={"successor_id": self.id, "successor_port": self.port})
+
+                # Notificar al antiguo predecesor para que actualice su sucesor
+                if previous_predecessor:
+                    url = f"http://localhost:{previous_predecessor.port}/update_successor"
+                    requests.post(url, json={"successor_id": node_id, "successor_port": node_port})
+
             else:
                 self.predecessor.join(node_info)
+
+        # Finalmente, notificar a los nodos predecesor y sucesor si no son el nodo actual o el nodo que se une
+        if self.successor and self.successor.id != node_id:
+            url = f"http://localhost:{self.successor.port}/join"
+            requests.post(url, json={"node_address": node_id, "node_port": node_port})
+
+        if self.predecessor and self.predecessor.id != node_id:
+            url = f"http://localhost:{self.predecessor.port}/join"
+            requests.post(url, json={"node_address": node_id, "node_port": node_port})
+
         # Una vez que el nodo se une, actualiza la finger table
-        self.update_fingers()
+        #self.update_fingers()
         # Notifica a otros nodos para que actualicen sus finger tables
-        self.notify_others()
+        #self.notify_others()
 
     def leave(self):
         current_successor = self.successor

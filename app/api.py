@@ -53,6 +53,27 @@ def lookup():
     else:
         return jsonify({"error": "Key is required"}), 400
 
+@app.route('/update_predecessor', methods=['POST'])
+def update_predecessor():
+    predecessor_id = request.json.get('predecessor_id')
+    predecessor_port = request.json.get('predecessor_port')
+    if predecessor_id and predecessor_port:
+        chord_node.predecessor = ChordNode(predecessor_id, predecessor_port)
+        return jsonify({"success": True}), 200
+    else:
+        return jsonify({"error": "Predecessor ID and port are required"}), 400
+
+@app.route('/update_successor', methods=['POST'])
+def update_successor():
+    successor_id = request.json.get('successor_id')
+    successor_port = request.json.get('successor_port')
+    if successor_id and successor_port:
+        chord_node.successor = ChordNode(successor_id, successor_port)
+        return jsonify({"success": True}), 200
+    else:
+        return jsonify({"error": "Successor ID and port are required"}), 400
+
+
 if __name__ == '__main__':
     app.run(host='0.0.0.0')
 
