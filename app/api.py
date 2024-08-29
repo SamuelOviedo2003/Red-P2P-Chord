@@ -73,6 +73,17 @@ def update_successor():
     else:
         return jsonify({"error": "Successor ID and port are required"}), 400
 
+@app.route('/update_finger_table', methods=['POST'])
+def update_finger_table():
+    new_node_id = request.json.get('new_node_id')
+    new_node_port = request.json.get('new_node_port')
+    if new_node_id is not None and new_node_port is not None:
+        chord_node.update_fingers_with_new_node(new_node_id, new_node_port)
+        return jsonify({"success": True}), 200
+    else:
+        return jsonify({"error": "New node ID and port are required"}), 400
+
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0')
