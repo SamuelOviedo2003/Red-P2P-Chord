@@ -9,6 +9,7 @@ class ChordNode:
         self.successor = None
         self.predecessor = None
         self.files = []
+        self.local_files = []
         self.total_bits = bits
         self.finger_table = self.create_finger_table()
         print(f"[DEBUG] Nodo creado con ID {self.id} y puerto {self.port}")
@@ -200,15 +201,70 @@ class ChordNode:
         # Almacena el archivo en el nodo correcto
         self.store_file(target_node, file_id)
 
+    def find_and_store_local_file(self, file_id):
+        """
+        Utiliza la finger table para encontrar el nodo que tiene el archivo y lo almacena en local_files si está en el nodo actual.
+        """
+        print(f"[DEBUG] Iniciando proceso para encontrar archivo '{file_id}' en la red desde nodo {self.id}")
+        
+        current_node = self
+        # Bucle para redirigir la búsqueda al predecesor real si es necesario
+        while current_node.predecessor:
+            print(f"[DEBUG] Consultando predecesor {current_node.predecessor.id} para archivo '{file_id}'")
+            url = f"http://localhost:{current_node.predecessor.port}/check_predecessor"
+            try:
+                response = requests.get(url, params={"file_id": file_id})
+                if response.status_code == 200 and response.json().get("continue_search"):
+                    print(f"[DEBUG] Redirigiendo la búsqueda al predecesor {current_node.predecessor.id} ({current_node.predecessor.port})")
+                    current_node = ChordNode(response.json()["predecessor_id"], response.json()["predecessor_port"])
+                else:
+                    print(f"[DEBUG] No se necesita redirigir la búsqueda al predecesor {current_node.predecessor.id}")
+                    break
+            except requests.exceptions.RequestException as e:
+                print(f"[DEBUG] Error al intentar conectarse con predecesor {current_node.predecessor.id} ({current_node.predecessor.port}): {e}")
+                break
+
+        # Una vez que se ha determinado el nodo correcto para comenzar la búsqueda,
+        # continuar con la lógica existente de encontrar el nodo más cercano en la finger table
+        closest_node_info = current_node.find_closest_preceding_node(file_id)
+        
+        if isinstance(closest_node_info, dict):
+            closest_node = ChordNode(closest_node_info['id'], closest_node_info['port'])
+        else:
+            closest_node = closest_node_info
+        
+        if closest_node.id != self.id:
+            print(f"[DEBUG] El nodo más cercano para buscar el archivo '{file_id}' es {closest_node.id} ({closest_node.port})")
+        else:
+            print(f"[DEBUG] El nodo actual {self.id} es el mejor candidato para buscar el archivo '{file_id}'")
+        
+        target_node = closest_node.find_node(file_id)
+        print(f"[DEBUG] Nodo objetivo para buscar archivo '{file_id}' es {target_node.id} ({target_node.port})")
+        
+        try:
+            url = f"http://localhost:{target_node.port}/check_file"
+            response = requests.get(url, params={"file_id": file_id})
+            if response.status_code == 200 and response.json().get("exists"):
+                print(f"[DEBUG] Archivo '{file_id}' encontrado en nodo {target_node.id} ({target_node.port})")
+                self.local_files.append(file_id)
+                print(f"[DEBUG] Archivo '{file_id}' añadido a local_files en nodo {self.id}")
+                return target_node.id, target_node.port
+            else:
+                print(f"[DEBUG] Archivo '{file_id}' no encontrado en nodo {target_node.id} ({target_node.port})")
+                return None, None
+        except requests.exceptions.RequestException as e:
+            print(f"[DEBUG] Error al intentar conectarse con nodo {target_node.id} ({target_node.port}): {e}")
+            return None, None
 
     def show(self):
-        result = []
-        if self.predecessor:
-            result.extend(self.predecessor.show())
-        result.append(f"{self.id} ({self.port}) - Archivos: {self.files}")
-        if self.successor:
-            result.extend(self.successor.show())
-        return result
+            result = []
+            if self.predecessor:
+                result.extend(self.predecessor.show())
+            result.append(f"{self.id} ({self.port}) - Archivos-red: {self.files} - Archivos-local: {self.local_files}")
+            if self.successor:
+                result.extend(self.successor.show())
+            return result
+
 
     def join(self, node_info):
         node_id, node_port = node_info

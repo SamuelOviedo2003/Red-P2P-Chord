@@ -54,6 +54,35 @@ def lookup():
     else:
         return jsonify({"error": "Key is required"}), 400
 
+@app.route('/find_file', methods=['GET'])
+def find_file():
+    file_id = request.args.get('file_id')
+    if file_id is not None:
+        node_id, node_port = chord_node.find_and_store_local_file(int(file_id))
+        if node_id is not None:
+            return jsonify({"success": True, "message": f"Archivo '{file_id}' encontrado en nodo {node_id} ({node_port})"}), 200
+        else:
+            return jsonify({"error": "Archivo no encontrado"}), 404
+    else:
+        return jsonify({"error": "File ID is required"}), 400
+
+@app.route('/check_file', methods=['GET'])
+def check_file():
+    file_id = int(request.args.get('file_id'))
+    exists = file_id in chord_node.files
+    return jsonify({"exists": exists}), 200
+
+@app.route('/check_predecessor', methods=['GET'])
+def check_predecessor():
+    file_id = int(request.args.get('file_id'))
+    continue_search = chord_node.predecessor.id > file_id if chord_node.predecessor else False
+    return jsonify({
+        "continue_search": continue_search,
+        "predecessor_id": chord_node.predecessor.id if chord_node.predecessor else None,
+        "predecessor_port": chord_node.predecessor.port if chord_node.predecessor else None
+    }), 200
+
+
 @app.route('/update_predecessor', methods=['POST'])
 def update_predecessor():
     predecessor_id = request.json.get('predecessor_id')
