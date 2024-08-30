@@ -99,7 +99,7 @@ class ChordNode:
         print(f"[DEBUG] Intentando almacenar archivo '{file_id}' en nodo {target_node.id} ({target_node.port}) desde nodo {self.id}")
         
         if target_node.id != self.id:
-            url = f"http://localhost:{target_node.port}/store"
+            url = f"http://localhost:{target_node.port}/upload"
             try:
                 response = requests.post(url, json={"file_id": file_id})
                 if response.status_code == 200:

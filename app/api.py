@@ -34,7 +34,7 @@ def show_finger_table():
     finger_table = chord_node.show_finger_table()
     return f"<pre>{finger_table}</pre>", 200
 
-@app.route('/store', methods=['POST'])
+@app.route('/upload', methods=['POST'])
 def store_file():
     file_id = request.json.get('file_id')  # Asumiendo que ahora pasas un número directamente
     if file_id is not None:
