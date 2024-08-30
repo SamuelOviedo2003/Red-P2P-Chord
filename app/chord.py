@@ -93,35 +93,113 @@ class ChordNode:
                     print(f"[DEBUG] Error de conexión al intentar actualizar finger table en nodo {node['id']} ({node['port']}): {e}")
 
 
-    def store_file(self, file_id):
-        target_node = self.find_node(file_id)
+    def store_file(self, node, file_id):
+        target_node = node
+        print(f"[DEBUG] Intentando almacenar archivo '{file_id}' en nodo {target_node.id} ({target_node.port}) desde nodo {self.id}")
+        
         if target_node.id != self.id:
             url = f"http://localhost:{target_node.port}/store"
-            response = requests.post(url, json={"file_id": file_id})
-            if response.status_code == 200:
-                print(f"[DEBUG] Archivo '{file_id}' almacenado en nodo {target_node.id} ({target_node.port}).")
-            else:
-                print(f"[DEBUG] Error al almacenar archivo '{file_id}' en nodo {target_node.id} ({target_node.port}).")
+            try:
+                response = requests.post(url, json={"file_id": file_id})
+                if response.status_code == 200:
+                    print(f"[DEBUG] Archivo '{file_id}' almacenado en nodo {target_node.id} ({target_node.port}).")
+                else:
+                    print(f"[DEBUG] Error al almacenar archivo '{file_id}' en nodo {target_node.id} ({target_node.port}): {response.status_code} - {response.text}")
+            except requests.exceptions.RequestException as e:
+                print(f"[DEBUG] Error al intentar conectarse con nodo {target_node.id} ({target_node.port}): {e}")
         else:
             self.files.append(file_id)
             print(f"[DEBUG] Archivo '{file_id}' almacenado localmente en nodo {self.id} ({self.port}).")
 
     def find_node(self, file_id):
         print(f"[DEBUG] Buscando nodo para almacenar archivo '{file_id}' desde nodo {self.id}")
-        if self.predecessor and self.predecessor.id > self.id:
-            if file_id > self.predecessor.id or file_id <= self.id:
-                print(f"[DEBUG] Archivo '{file_id}' se almacena en nodo {self.id}")
-                return self
-        if self.successor and (self.id < file_id <= self.successor.id):
-            print(f"[DEBUG] Archivo '{file_id}' se almacena en sucesor {self.successor.id}")
-            return self.successor
-        if self.predecessor and (self.predecessor.id < file_id <= self.id):
+
+        # Si el predecesor es None (es el primer nodo) o si el file_id es menor que el id del nodo actual,
+        # entonces debe almacenarse en este nodo si no hay un nodo con un id menor.
+        if not self.predecessor or (self.predecessor.id > self.id and (file_id > self.predecessor.id or file_id <= self.id)):
+            print(f"[DEBUG] Archivo '{file_id}' se almacena en nodo {self.id} porque no hay un predecesor más pequeño.")
+            return self
+
+        # Si el file_id es menor que el id del nodo actual pero mayor que el id del predecesor, se almacena aquí.
+        if self.predecessor and self.predecessor.id < file_id <= self.id:
             print(f"[DEBUG] Archivo '{file_id}' se almacena en nodo {self.id}")
             return self
+
+        # Si el file_id es mayor que el id del nodo actual pero menor que el id del sucesor, se almacena en el sucesor.
+        if self.successor and self.id < file_id <= self.successor.id:
+            print(f"[DEBUG] Archivo '{file_id}' se almacena en sucesor {self.successor.id}")
+            return self.successor
+
+        # Si no se encuentra un nodo adecuado, continúa la búsqueda en el sucesor.
         if self.successor and self.successor.id != self.id:
+            print(f"[DEBUG] Redirigiendo la búsqueda del archivo '{file_id}' al sucesor {self.successor.id}")
             return self.successor.find_node(file_id)
+
+        # Caso por defecto, almacena en el nodo actual.
         print(f"[DEBUG] Archivo '{file_id}' se almacena en nodo {self.id} (caso por defecto)")
         return self
+
+    def find_closest_preceding_node(self, file_id):
+        """
+        Revisa la finger table, el nodo actual y el predecesor para encontrar el nodo con el ID inmediato mayor al file_id.
+        """
+        print(f"[DEBUG] Revisando finger table en nodo {self.id} para archivo '{file_id}'")
+
+        # Si el predecesor sigue siendo mayor al file_id, redirigir la búsqueda hacia él
+        if self.predecessor and self.predecessor.id > file_id:
+            print(f"[DEBUG] Redirigiendo la búsqueda al predecesor {self.predecessor.id} porque es mayor al file_id")
+            return self.predecessor.find_closest_preceding_node(file_id)
+
+        # Crear una lista de sucesores que sean mayores o iguales a file_id, incluyendo el nodo actual
+        possible_successors = []
+
+        if self.id >= file_id:
+            possible_successors.append({'id': self.id, 'port': self.port})
+
+        for finger in self.finger_table:
+            successor_id = finger['successor']['id'] if finger['successor'] else None
+
+            if successor_id is not None and successor_id >= file_id:
+                possible_successors.append(finger['successor'])
+
+        if possible_successors:
+            # Encontrar el menor de los sucesores mayores o iguales a file_id
+            closest_successor = min(possible_successors, key=lambda x: x['id'])
+            print(f"[DEBUG] Nodo más cercano encontrado: {closest_successor['id']}")
+            return closest_successor
+
+        # Si no se encuentra ningún nodo adecuado, retornar el nodo actual
+        print(f"[DEBUG] No se encontraron sucesores adecuados, utilizando el nodo actual {self.id}")
+        return {'id': self.id, 'port': self.port}
+
+    def store_file_via_finger_table(self, file_id):
+        """
+        Utiliza la finger table para encontrar el nodo más cercano y almacena el archivo allí.
+        """
+        print(f"[DEBUG] Iniciando proceso para almacenar archivo '{file_id}' utilizando la finger table desde nodo {self.id}")
+        
+        # Encuentra el nodo más cercano utilizando la finger table
+        closest_node_info = self.find_closest_preceding_node(file_id)
+        
+        # Convertir el diccionario en un objeto ChordNode si es necesario
+        if isinstance(closest_node_info, dict):
+            closest_node = ChordNode(closest_node_info['id'], closest_node_info['port'])
+        else:
+            closest_node = closest_node_info
+        
+        # Si el nodo más cercano no es el mismo nodo actual
+        if closest_node.id != self.id:
+            print(f"[DEBUG] El nodo más cercano para almacenar el archivo '{file_id}' es {closest_node.id} ({closest_node.port})")
+        else:
+            print(f"[DEBUG] El nodo actual {self.id} es el mejor candidato para almacenar el archivo '{file_id}'")
+        
+        # Encuentra el nodo exacto donde se debe almacenar el archivo
+        target_node = closest_node.find_node(file_id)
+        print(f"[DEBUG] Nodo objetivo para almacenar archivo '{file_id}' es {target_node.id} ({target_node.port})")
+        
+        # Almacena el archivo en el nodo correcto
+        self.store_file(target_node, file_id)
+
 
     def show(self):
         result = []

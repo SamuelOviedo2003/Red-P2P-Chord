@@ -38,10 +38,11 @@ def show_finger_table():
 def store_file():
     file_id = request.json.get('file_id')  # Asumiendo que ahora pasas un número directamente
     if file_id is not None:
-        chord_node.store_file(file_id)
-        return jsonify({"success": True, "message": f"Archivo '{file_id}' almacenado."}), 200
+        chord_node.store_file_via_finger_table(file_id)
+        return jsonify({"success": True, "message": f"Archivo '{file_id}' almacenado usando la finger table."}), 200
     else:
         return jsonify({"error": "File ID is required"}), 400
+
 
 
 @app.route('/lookup', methods=['GET'])

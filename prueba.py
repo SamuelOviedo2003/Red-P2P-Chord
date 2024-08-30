@@ -61,5 +61,6 @@ class ChordNode:
 # Ejemplo de uso
 node1 = ChordNode(10,9)
 
-
+for i in reversed(range(8)):
+    print(i)
 print(node1.show_finger_table())
