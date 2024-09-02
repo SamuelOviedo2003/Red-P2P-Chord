@@ -37,3 +37,73 @@ Chord utiliza un método de hash que mapea tanto nodos como archivos dentro de u
 ### Tablas de Archivos y Simulación Local
 
 Cada nodo en la red Chord posee una tabla de archivos que almacena aquellos archivos cuyo identificador es igual o inmediatamente menor que el ID del nodo. En el contexto de este proyecto, donde utilizamos datos simulados (dummies), esta tabla de archivos se implementa como una lista simple. Además, hemos incorporado una lista separada llamada *archivos local*, que simula la descarga de archivos en un entorno local. Es importante destacar que esta lista local no es considerada dentro del mecanismo de Chord, mientras que los archivos en la tabla de archivos sí lo son.
+
+## 3. Descripción del Ambiente de Desarrollo y Técnico
+
+En este proyecto, hemos utilizado las siguientes herramientas y tecnologías para desarrollar el sistema P2P:
+
+### Lenguaje de Programación
+- **Python**: El lenguaje principal utilizado para implementar la lógica de los nodos y la gestión de la red P2P.
+
+### Librerías y Paquetes
+- **Flask==1.1.4**: Utilizado para implementar las APIs REST necesarias para la comunicación entre los nodos. Flask nos permitió crear rutas para las operaciones GET y POST, facilitando así la conexión y la comunicación entre los diferentes nodos de la red.
+  
+- **requests==2.25.1**: Utilizado internamente para realizar solicitudes HTTP, permitiendo a los nodos comunicarse entre sí de manera automática. Esta librería fue esencial para mantener la red P2P y para la búsqueda de archivos a través de las APIs.
+
+- **tabulate==0.8.9**: Utilizado para presentar de manera ordenada y entendible los datos de la Finger Table. Esta librería nos permitió formatear las tablas de información de los nodos de una forma clara y legible.
+
+### Estructura del Código
+El código del proyecto está organizado de la siguiente manera:
+
+- **Carpeta `app`**: Contiene los archivos principales relacionados con la lógica de los nodos y el manejo de las APIs.
+  - `chord.py`: Contiene la clase `ChordNode`, que maneja toda la lógica de los nodos, incluyendo sus atributos y métodos. Esta clase es el núcleo del sistema P2P, gestionando las operaciones relacionadas con la red y los archivos.
+  - `api.py`: Se encarga del manejo de las peticiones a través de Flask. Este archivo define las rutas y los controladores necesarios para gestionar las operaciones GET y POST entre los nodos.
+
+- **Archivo `run.py`**: Ubicado fuera de la carpeta `app`, este archivo es responsable de iniciar un nodo en la red. Crea un nodo que escucha en la dirección `0.0.0.0`, asignándole atributos como `port`, `node_id`, y `node_ip`.
+
+### Compilación y Ejecución Local
+Para compilar y ejecutar localmente el sistema P2P, sigue los siguientes pasos:
+
+1. **Crear un Nuevo Nodo**:
+   - Ejecuta el siguiente comando en tu terminal para iniciar un nuevo nodo:
+     ```bash
+     python3 run.py puerto id
+     ```
+   - Donde `puerto` es el puerto en el que el nodo se creara y `id` es el identificador único del nodo.
+  
+Para ejecutar los comandos podemos utilizar Postman o hacer una solicitud CURL como se muestra a continuación:
+
+2. **Unir un Nodo a la Red**:
+     ```bash
+     curl -X POST -H "Content-Type: application/json" -d '{"node_address": "id_a_unir", "node_port": "puerto_a_unir"}' http://localhost:puerto_actual/join
+     ```
+   - Reemplaza `id_a_unir` y `puerto_a_unir` con los valores correspondientes del nodo al que deseas unirte, y `puerto_actual` con el puerto del nodo que está intentando unirse.
+
+3. **Mostrar la Finger Table**:
+   - Para mostrar la Finger Table del nodo, utiliza el siguiente comando cURL:
+     ```bash
+     curl -X GET "http://localhost:puerto/show_finger_table"
+     ```
+   - Reemplaza `puerto` con el puerto correspondiente del nodo.
+
+4. **Mostrar Información del Nodo**:
+   - Para mostrar la información del nodo, usa:
+     ```bash
+     curl -X GET "http://localhost:puerto/show"
+     ```
+   - Reemplaza `puerto` con el puerto correspondiente del nodo.
+
+5. **Subir Archivos a la Red**:
+   - Para subir un archivo a la red, ejecuta el siguiente comando:
+     ```bash
+     curl -X POST http://localhost:puerto_actual/upload -H "Content-Type: application/json" -d '{"file_id": "id_archivo"}'
+     ```
+   - Reemplaza `puerto_actual` con el puerto del nodo que realizará la subida, e `id_archivo` con el identificador del archivo a subir.
+
+6. **Buscar y Guardar un Archivo en Local**:
+   - Para buscar un archivo en la red y guardarlo en el nodo local, usa el siguiente comando:
+     ```bash
+     curl -X GET "http://localhost:puerto/find_file?file_id=id_a_buscar"
+     ```
+   - Reemplaza `puerto` con el puerto del nodo y `id_a_buscar` con el identificador del archivo que deseas buscar.
+
